@@ -32,7 +32,8 @@ def read_decennial(race_specific_sex_by_age = sex_by_age_asian_alone, path = 'WA
     df = add_geoid(df)
     df = df[~df.variable.str[-2:].isin(['02','26'])] #combine this with prev step if rewrite rename_census_ages
     
-    df.drop(columns=location_cols + ['var_key'], inplace=True)
+    df.drop(columns=location_cols + ['var_key','variable'], inplace=True)
+    df.rename(columns={'value':'pop_count'}, inplace=True)
     
     return df
     

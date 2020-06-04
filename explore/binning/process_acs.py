@@ -26,7 +26,7 @@ def load_incoming_data(personurl, year):
                 "racnh","racpi","racsor","racwht","hisp"]
     return df.filter(items=df_cols)
 
-def format_acs(input_df, races, year):
+def format_acs(input_df, races, year, incl_hispanic = False):
     """input: raw ACS data for a state & year
        output: df with counts of people (using person weights) per state/year/sex/age/ethnicity/race bin 
     """
@@ -35,6 +35,7 @@ def format_acs(input_df, races, year):
     
     #combine native hawaiian and pacific islander
     df['racnhpi'] = df[['racnh','racpi']].max(axis=1)
+    df.drop(columns=['racnh','racpi'], inplace=True)
     
     #TEST sum of races == racnum
     all_races = ['racaian', 'racasn', 'racblk', 'racnhpi', 'racsor', 'racwht']
@@ -135,12 +136,19 @@ def format_acs(input_df, races, year):
                       }, inplace=True)
     df.drop(["hisp","st","racnum"], axis=1, inplace=True)
     
-    #get population counts per race/ethnicity/sex/age
-    df['pop_count'] = df.groupby(all_races + ['hispanic','sex_id','age'])['weight'].transform('sum')
-    df.drop(columns=['weight'], inplace=True)
-    df.drop_duplicates(inplace=True)
+    #drop hispanic, get population counts per race/ethnicity/sex/age
+    if not incl_hispanic:
+        df.drop(columns=['hispanic'], inplace=True) 
+        df['pop_count'] = df.groupby(all_races + ['sex_id','age'])['weight'].transform('sum')
+        df.drop(columns=['weight','serialno'], inplace=True)
+        df.drop_duplicates(inplace=True)
+        df = df[['state','year','sex_id','age'] + all_races + ['race_count','pop_count']]
+    else:
+        df['pop_count'] = df.groupby(all_races + ['hispanic','sex_id','age'])['weight'].transform('sum')
+        df.drop(columns=['weight','serialno'], inplace=True)
+        df.drop_duplicates(inplace=True)
+        df = df[['state','year','sex_id','age','hispanic'] + all_races + ['race_count','pop_count']]
     
-    df = df[['state','year','sex_id','age','hispanic'] + all_races + ['race_count','pop_count']]
     df = df.sort_values(df.columns.tolist())
     
     return df
@@ -161,7 +169,7 @@ def format_acs(input_df, races, year):
 
     return df
 
-def add_decennial_age_bins(input_df):
+def add_decennial_age_bins(input_df, incl_hispanic = False):
     ''' merge on age groups and calculate proportion of age group each age comprises
     '''
     df = input_df.copy(deep=True)
@@ -174,12 +182,20 @@ def add_decennial_age_bins(input_df):
     
     # calculate proportion of age bin each age comprises
     all_races = ['racaian', 'racasn', 'racblk', 'racnhpi', 'racsor', 'racwht']
-    df['pop_denom'] = df.groupby(['state','year',
-                                  'sex_id','age','hispanic',
+    if incl_hispanic:
+        df['pop_denom'] = df.groupby(['state','year',
+                                  'sex_id','hispanic',
                                   'age_start','age_end'] + all_races)['pop_count'].transform('sum')
+    else:
+        df['pop_denom'] = df.groupby(['state','year',
+                                      'sex_id','age_start','age_end'] + all_races)['pop_count'].transform('sum')
+        
     df['pop_proportion'] = df['pop_count'] / df['pop_denom']
     
     #clean up
     df.drop(columns=['age_bins','pop_denom'], inplace=True)
+    
+    #check
+    df.groupby(['sex_id','age_start','age_end']).sum().pop_proportion.unique()
     
     return df
