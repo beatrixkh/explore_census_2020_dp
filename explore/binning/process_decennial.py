@@ -15,7 +15,7 @@ sex_by_age_otherrace_alone = ['P012F00' + str(i) if i<10 else 'P012F0' + str(i) 
 sex_by_age_mixed_race = ['P012G00' + str(i) if i<10 else 'P012G0' + str(i) for i in range(1,50)]
 
     
-def read_decennial(race_specific_sex_by_age = sex_by_age_asian_alone, path = 'WA2010DHCCSV/WA2010DHC.CSV'):
+def read_decennial(race_specific_sex_by_age, path = 'WA2010DHCCSV/WA2010DHC.CSV'):
     df = pd.read_csv(input_dir + path, usecols = location_cols + race_specific_sex_by_age)
     df = df[df.BLOCK.notna()]
     
@@ -42,7 +42,36 @@ def add_geoid(input_df):
         rewrite this for states/tracts/counties with different str(int(x)) lengths
     """
     df = input_df.copy(deep=True)
-    df['geoid'] = df.STATE.astype(str) + df.COUNTY.astype(str).str[:-2] + df.TRACT.astype(str).str[:-2] + df.BLOCK.astype(str).str[:-2]
+    
+    # if lowercase, switch to upper
+    location_cols = ['state','county','tract','blkgrp']
+    
+    location_to_upper_dict = {}
+    for i in location_cols:
+        location_to_upper_dict[i] = i.upper()
+        
+    if sum([i in df.columns for i in location_cols])==4:
+        if sum([i.upper() in df.columns for i in location_cols])!=4:
+            df.rename(columns=location_to_upper_dict, inplace=True)
+        else:
+            raise("oops; need to include state, county, tract, blkgrp cols")
+            
+    
+    df['COUNTY'] = df.COUNTY.astype(int).astype(str)
+    df['COUNTY'] = ['00' + i for i in df.COUNTY]
+    df['COUNTY'] = df.COUNTY.str[-3:]
+
+    df['TRACT'] = df.COUNTY.astype(int).astype(str)
+    df['TRACT'] = ['00000' + i for i in df.COUNTY]
+    df['TRACT'] = df.TRACT.str[-6:]
+
+    df['BLKGRP'] = df.COUNTY.astype(int).astype(str)
+
+    df['BLOCK'] = df.COUNTY.astype(int).astype(str)
+    df['BLOCK'] = ['000' + i for i in df.COUNTY]
+    df['BLOCK'] = df.BLOCK.str[-4:]
+
+    df['geoid'] = df.STATE.astype(str) + df.COUNTY.astype(str) + df.TRACT.astype(str) + df.BLOCK.astype(str)
     
     #test len(i) for i in df.geoid == 15
     

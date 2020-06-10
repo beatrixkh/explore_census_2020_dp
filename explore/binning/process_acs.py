@@ -1,34 +1,92 @@
 import pandas as pd
 import numpy as np
 from datetime import date
-import tests
+# import tests
 
 """Goal: pull in ACS data. Output, for a unique state (WA)  x race combination, (black alone, black + asian, aian + nhpi + white, etc.),
 a df in long format, with, for each [sex] x [single-year-age] x [state] x [year], the count of corresponding individuals residing in
 the location
 """
 
-def load_data(personurl, year):
-    year = year
-    IN_DIR = "/home/j/DATA/USA/AMERICAN_COMMUNITY_SURVEY"
-    df = pd.read_csv(IN_DIR + '/' + str(year) + '/' + personurl) 
-    df.columns = df.columns.map(str.lower)
-    df_cols = ["serialno", "st", "pwgtp", "agep", "sex","racnum","racaian","racasn","racblk",
+import pandas as pd, numpy as np, os
+
+# def load_data(personurl, year):
+#     year = year
+#     IN_DIR = "/home/j/DATA/USA/AMERICAN_COMMUNITY_SURVEY"
+#     df = pd.read_csv(IN_DIR + '/' + str(year) + '/' + personurl) 
+#     df.columns = df.columns.map(str.lower)
+#     df_cols = ["serialno", "st", "pwgtp", "agep", "sex","racnum","racaian","racasn","racblk",
+#                 "racnh","racpi","racsor","racwht","hisp"]
+#     return df.filter(items=df_cols)
+
+def load_data(state, years = np.arange(1996,2013).tolist() + [2017]):
+    assert(len(state)==2), "state must be 2-char abbreviation"
+    state = state.upper()
+    
+    # convert to list
+    if type(years)==int:
+        years = [years]
+    elif type(years)!=list:
+        years = years.tolist()
+    
+    for year in years:
+        assert(year in np.arange(1996,2013).tolist() + [2017]), "years must be from 1996-2012 or 2017; else use load_incoming_data()"
+    
+    df = pd.DataFrame()
+    for year in years:
+        IN_DIR = "/home/j/DATA/USA/AMERICAN_COMMUNITY_SURVEY/"
+        personurl = 'USA_ACS_' + str(year) + '_PERSONS_' + str(state) + '_Y2012M02D01.CSV'
+        path = IN_DIR + str(year) + '/' + personurl
+        if os.path.isfile(path):
+            new_df = pd.read_csv(path) 
+            new_df["year"] = str(year)   
+            new_df.columns = new_df.columns.map(str.lower)
+            df = df.append(new_df)
+    df["st"] = state
+    df_cols = ["serialno", "st", "year", "pwgtp", "agep", "sex","racnum","racaian","racasn","racblk",
                 "racnh","racpi","racsor","racwht","hisp"]
     return df.filter(items=df_cols)
     
-def load_incoming_data(personurl, year):
-    year = year
-    IN_DIR = "/home/j/DATA/Incoming Data/USA/AMERICAN_COMMUNITY_SURVEY"
-    df = pd.read_csv(IN_DIR + '/' + str(year) + '/' + "data/" + personurl)
-    df.columns = df.columns.map(str.lower)
-    df_cols = ["serialno", "st", "pwgtp", "agep", "sex","racnum","racaian","racasn","racblk",
-                "racnh","racpi","racsor","racwht","hisp"]
+# def load_incoming_data(personurl, year):
+#     year = year
+#     IN_DIR = "/home/j/DATA/Incoming Data/USA/AMERICAN_COMMUNITY_SURVEY"
+#     df = pd.read_csv(IN_DIR + '/' + str(year) + '/' + "data/" + personurl)
+#     df["year"] = str(year)
+#     df.columns = df.columns.map(str.lower)
+#     df_cols = ["serialno", "st","year", "pwgtp", "agep", "sex","racnum","racaian","racasn","racblk",
+#                 "racnh","racpi","racsor","racwht","hisp"]
+#     return df.filter(items=df_cols)
+
+def load_incoming_data(state, years = np.arange(2012,2017).tolist()):
+    assert(len(state)==2), "state must be 2-char abbreviation"
+    state = state.lower()
+    
+    # convert to list
+    if type(years)==int:
+        years = [years]
+    elif type(years)!=list:
+        years = years.tolist()
+    
+    for year in years:
+        assert(year in np.arange(2012,2017)), "years must be from 2012-2016; else use load_data()"
+    
+    df = pd.DataFrame()
+    for year in years:
+        IN_DIR = "/home/j/DATA/Incoming Data/USA/AMERICAN_COMMUNITY_SURVEY"
+        personurl = 'ss' + str(year)[2:] + 'p' + state + '.csv'
+        
+        new_df = pd.read_csv(IN_DIR + '/' + str(year) + '/' + "data/" + personurl)
+        new_df["year"] = str(year)
+        new_df.columns = new_df.columns.map(str.lower)
+        df = df.append(new_df)
+    df_cols = ["serialno", "st","year", "pwgtp", "agep", "sex","racnum","racaian","racasn","racblk",
+                    "racnh","racpi","racsor","racwht","hisp"]
     return df.filter(items=df_cols)
 
-def format_acs(input_df, races, year, incl_hispanic = False):
-    """input: raw ACS data for a state & year
-       output: df with counts of people (using person weights) per state/year/sex/age/ethnicity/race bin 
+def format_acs(input_df, races, years, incl_hispanic = False):
+    """input: raw ACS data for a state & year(s)
+       output: df with counts of people (using person weights) per state/sex/age/ethnicity/race bin, averaged over all years (each year 
+               weighted equally)
     """
     #create copy of df
     df = input_df.copy(deep=True)
@@ -41,9 +99,14 @@ def format_acs(input_df, races, year, incl_hispanic = False):
     all_races = ['racaian', 'racasn', 'racblk', 'racnhpi', 'racsor', 'racwht']
     df['race_count'] = df[all_races].sum(axis=1)
     assert(df[df.race_count!=df.racnum].shape[0]==0), "races in each row dont' sum to row total"
+#     assert(type(races)==list), "Oops; even if only one race, type(races) needs to be list"
     
     #subset to races of interest
+    if type(races)!=list:
+        races = [races]
     df = df[df.race_count==len(races)]
+    
+    
     for i in races:
         df = df[df[i] > 0]
     
@@ -128,51 +191,41 @@ def format_acs(input_df, races, year, incl_hispanic = False):
                              56: "WY",
                              72: "PR"})
     
-    df["year"] = year
-    
     df.rename(columns={"agep": "age",
                        "pwgtp": "weight",
                        "sex": "sex_id"
                       }, inplace=True)
     df.drop(["hisp","st","racnum"], axis=1, inplace=True)
     
+    #weight population distr. from each year equally
+    df["pop_year_weight"] = df.groupby('year')['weight'].transform('sum') / df.weight.sum()
+    df["weight"] = df.weight * df.pop_year_weight
+    df.drop(columns=['pop_year_weight'], inplace=True)
+    
     #drop hispanic, get population counts per race/ethnicity/sex/age
     if not incl_hispanic:
         df.drop(columns=['hispanic'], inplace=True) 
         df['pop_count'] = df.groupby(all_races + ['sex_id','age'])['weight'].transform('sum')
-        df.drop(columns=['weight','serialno'], inplace=True)
+        df.drop(columns=['weight','serialno','year'], inplace=True)
         df.drop_duplicates(inplace=True)
-        df = df[['state','year','sex_id','age'] + all_races + ['race_count','pop_count']]
+        df = df[['state','sex_id','age'] + all_races + ['race_count','pop_count']]
     else:
         df['pop_count'] = df.groupby(all_races + ['hispanic','sex_id','age'])['weight'].transform('sum')
-        df.drop(columns=['weight','serialno'], inplace=True)
+        df.drop(columns=['weight','serialno','year'], inplace=True)
         df.drop_duplicates(inplace=True)
-        df = df[['state','year','sex_id','age','hispanic'] + all_races + ['race_count','pop_count']]
+        df = df[['state','sex_id','age','hispanic'] + all_races + ['race_count','pop_count']]
     
+    df['pop_count'] = np.round(df.pop_count)
     df = df.sort_values(df.columns.tolist())
     
-    return df
-
-    #tests
-    FINAL_COLS = ['state', 'year', 'sex_id', 'age', 'hispanic', 'racaian', 'racasn',
-       'racblk', 'racnhpi', 'racsor', 'racwht', 'race_count', 'pop_count']
-    
-    assert (FINAL_COLS in df.columns)
-    
-    assert(df.state.dtype == 'O')
-
-    for i in df.columns:
-        if i == 'state':
-            assert (df[i].dtype == 'O'), "Check location type"
-        else:
-            assert (df[i].dtype == 'int64'), "Check numeric type"
-
     return df
 
 def add_decennial_age_bins(input_df, incl_hispanic = False):
     ''' merge on age groups and calculate proportion of age group each age comprises
     '''
     df = input_df.copy(deep=True)
+
+
     
     # add on age bin columns corresponding to decennial data
     age_starts = [0,5,10,15,18,20,21,22,25,30,35,40,45,50,55,60,62,65,67,70,75,80,85,120]
@@ -183,11 +236,11 @@ def add_decennial_age_bins(input_df, incl_hispanic = False):
     # calculate proportion of age bin each age comprises
     all_races = ['racaian', 'racasn', 'racblk', 'racnhpi', 'racsor', 'racwht']
     if incl_hispanic:
-        df['pop_denom'] = df.groupby(['state','year',
+        df['pop_denom'] = df.groupby(['state',
                                   'sex_id','hispanic',
                                   'age_start','age_end'] + all_races)['pop_count'].transform('sum')
     else:
-        df['pop_denom'] = df.groupby(['state','year',
+        df['pop_denom'] = df.groupby(['state',
                                       'sex_id','age_start','age_end'] + all_races)['pop_count'].transform('sum')
         
     df['pop_proportion'] = df['pop_count'] / df['pop_denom']
