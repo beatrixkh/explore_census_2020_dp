@@ -42,21 +42,6 @@ def add_geoid(input_df):
         rewrite this for states/tracts/counties with different str(int(x)) lengths
     """
     df = input_df.copy(deep=True)
-    
-    # if lowercase, switch to upper
-    location_cols = ['state','county','tract','blkgrp']
-    
-    location_to_upper_dict = {}
-    for i in location_cols:
-        location_to_upper_dict[i] = i.upper()
-        
-    if sum([i in df.columns for i in location_cols])==4:
-        if sum([i.upper() in df.columns for i in location_cols])!=4:
-            df.rename(columns=location_to_upper_dict, inplace=True)
-        else:
-            raise("oops; need to include state, county, tract, blkgrp cols")
-            
-    
     df['COUNTY'] = df.COUNTY.astype(int).astype(str)
     df['COUNTY'] = ['00' + i for i in df.COUNTY]
     df['COUNTY'] = df.COUNTY.str[-3:]
